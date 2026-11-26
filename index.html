@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>傾いた平面の勾配を可視化</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17233b;
+      --muted: #586b86;
+      --border: #dce5f1;
+      --blue: #2563eb;
+      --orange: #ea580c;
+      --purple: #7c3aed;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f3f7fd;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                   "Noto Sans JP", sans-serif;
+      line-height: 1.6;
+    }
+
+    main {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 32px 0 48px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.5rem, 4vw, 2.2rem);
+      line-height: 1.35;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: 1.1rem;
+    }
+
+    .lead {
+      max-width: 780px;
+      color: var(--muted);
+      margin: 10px 0 22px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 28px rgba(34, 62, 105, 0.06);
+    }
+
+    .visual {
+      overflow: hidden;
+    }
+
+    .visual-header {
+      padding: 20px 20px 0;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 400px;
+      cursor: grab;
+      touch-action: none;
+    }
+
+    canvas:active { cursor: grabbing; }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 18px;
+      padding: 0 20px 20px;
+      font-size: 0.88rem;
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex: none;
+    }
+
+    .controls {
+      padding: 20px;
+    }
+
+    .control {
+      margin: 16px 0;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--blue);
+    }
+
+    select, button {
+      min-height: 40px;
+      padding: 7px 10px;
+      border: 1px solid #cbd8e8;
+      border-radius: 8px;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    select { width: 100%; }
+
+    button {
+      cursor: pointer;
+      background: #f8fafc;
+    }
+
+    button:hover { background: #eaf2ff; }
+
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 3px solid #93c5fd;
+      outline-offset: 2px;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .result {
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 12px;
+      background: #eff6ff;
+    }
+
+    .result-title {
+      color: #4b6184;
+      font-size: 0.88rem;
+      font-weight: 700;
+    }
+
+    .result-value {
+      color: #1d4ed8;
+      font-size: 1.8rem;
+      font-weight: 800;
+      line-height: 1.3;
+    }
+
+    .result-note {
+      color: #435a79;
+      font-size: 0.88rem;
+    }
+
+    .triangle-card {
+      margin-top: 16px;
+      padding: 20px;
+    }
+
+    .triangle-layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 320px) 1fr;
+      align-items: center;
+      gap: 20px;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      max-width: 320px;
+      height: auto;
+      background: #f8fbff;
+      border-radius: 10px;
+    }
+
+    .triangle-text p {
+      margin: 8px 0;
+      color: #43536b;
+    }
+
+    .formula {
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #f2f6fc;
+      font-weight: 700;
+    }
+
+    .small {
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 760px) {
+      .layout, .triangle-layout {
+        grid-template-columns: 1fr;
+      }
+
+      canvas { height: 340px; }
+
+      main { padding-top: 24px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>傾いた平面の勾配を見てみよう</h1>
+  <p class="lead">
+    最も急な方向と南北方向の勾配から、東西方向の勾配を求めます。
+    はじめは問題の条件が設定されています。
+  </p>
+
+  <div class="layout">
+    <section class="card visual" aria-labelledby="visual-title">
+      <div class="visual-header">
+        <h2 id="visual-title">斜面と上り方向</h2>
+        <div class="hint">図をドラッグすると視点を回転できます。</div>
+      </div>
+
+      <canvas
+        id="scene"
+        role="img"
+        aria-label="傾いた平面と最急方向、東西方向、南北方向の上りを示す立体図"
+      >
+        お使いのブラウザは図の表示に対応していません。
+      </canvas>
+
+      <div class="legend">
+        <span class="legend-item">
+          <span class="dot" style="background:#7c3aed"></span>
+          最も急な上り
+        </span>
+        <span class="legend-item">
+          <span class="dot" style="background:#2563eb"></span>
+          南北方向の上り
+        </span>
+        <span class="legend-item">
+          <span class="dot" style="background:#ea580c"></span>
+          東西方向の上り
+        </span>
+      </div>
+    </section>
+
+    <section class="card controls" aria-labelledby="controls-title">
+      <h2 id="controls-title">条件を変えてみる</h2>
+
+      <div class="control">
+        <label for="maxSlope">
+          最急勾配の大きさ：
+          <span id="maxValue">1 / 3</span>
+        </label>
+        <input id="maxSlope" type="range"
+               min="30" max="240" step="1" value="100">
+      </div>
+
+      <div class="control">
+        <label for="northSlope">
+          南北方向の勾配の大きさ：
+          <span id="northValue">1 / 5</span>
+        </label>
+        <input id="northSlope" type="range"
+               min="0" max="100" step="1" value="60">
+        <div class="small">
+          南北方向の勾配は、最急勾配を超えられません。
+        </div>
+      </div>
+
+      <div class="control">
+        <label for="eastDirection">東西方向の上り</label>
+        <select id="eastDirection">
+          <option value="1">東が上り</option>
+          <option value="-1">西が上り</option>
+        </select>
+      </div>
+
+      <div class="control">
+        <label for="northDirection">南北方向の上り</label>
+        <select id="northDirection">
+          <option value="1">北が上り</option>
+          <option value="-1">南が上り</option>
+        </select>
+      </div>
+
+      <div class="buttons">
+        <button type="button" id="resetValues">問題の条件に戻す</button>
+        <button type="button" id="resetView">視点を戻す</button>
+      </div>
+
+      <div class="result" aria-live="polite">
+        <div class="result-title">東西方向の勾配の大きさ</div>
+        <div class="result-value" id="answer">4 / 15</div>
+        <div class="result-note" id="signedAnswer"></div>
+      </div>
+    </section>
+  </div>
+
+  <section class="card triangle-card" aria-labelledby="triangle-title">
+    <h2 id="triangle-title">勾配ベクトルの直角三角形</h2>
+
+    <div class="triangle-layout">
+      <svg id="triangle" viewBox="0 0 300 220"
+           role="img"
+           aria-label="東西と南北の勾配を直角な辺とする三角形">
+      </svg>
+
+      <div class="triangle-text">
+        <p>
+          横の辺が東西方向、縦の辺が南北方向の勾配の大きさです。
+          斜辺が最急勾配に対応します。
+        </p>
+        <div class="formula" id="formula"></div>
+        <p class="small">
+          この三角形は水平面上の勾配ベクトルを表しています。
+          立体図の斜面上に描いた矢印自体が直角という意味ではありません。
+        </p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const canvas = $("scene");
+  const ctx = canvas.getContext("2d");
+  const triangle = $("triangle");
+
+  const state = {
+    azimuth: -0.65,
+    elevation: 0.58
+  };
+
+  const colors = {
+    steep: "#7c3aed",
+    north: "#2563eb",
+    east: "#ea580c"
+  };
+
+  // スライダーの整数値を 300 で割る。
+  // 100/300 = 1/3、60/300 = 1/5 を正確に設定できる。
+  function values() {
+    const maxUnits = Number($("maxSlope").value);
+    const northUnits = Number($("northSlope").value);
+    const g = maxUnits / 300;
+    const bMagnitude = northUnits / 300;
+    const aMagnitude = Math.sqrt(Math.max(0, g * g - bMagnitude * bMagnitude));
+
+    return {
+      maxUnits,
+      northUnits,
+      g,
+      bMagnitude,
+      aMagnitude,
+      a: aMagnitude * Number($("eastDirection").value),
+      b: bMagnitude * Number($("northDirection").value)
+    };
+  }
+
+  function format(value) {
+    return value.toFixed(3);
+  }
+
+  function project(point, width, height) {
+    const [x, y, z] = point;
+    const ca = Math.cos(state.azimuth);
+    const sa = Math.sin(state.azimuth);
+    const horizontal = x * ca - y * sa;
+    const depth = x * sa + y * ca;
+    const scale = Math.min(width / 10.5, height / 8.5);
+
+    return {
+      x: width / 2 + horizontal * scale,
+      y: height * 0.57
+        + depth * Math.sin(state.elevation) * scale
+        - z * Math.cos(state.elevation) * scale
+    };
+  }
+
+  function line(a, b, color, width = 1, dashed = false) {
+    ctx.beginPath();
+    ctx.setLineDash(dashed ? [5, 5] : []);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function arrow(a, b, color, width = 3) {
+    const distance = Math.hypot(b.x - a.x, b.y - a.y);
+    if (distance < 1) return;
+
+    line(a, b, color, width);
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const size = 10;
+
+    ctx.beginPath();
+    ctx.moveTo(b.x, b.y);
+    ctx.lineTo(
+      b.x - size * Math.cos(angle - Math.PI / 6),
+      b.y - size * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.lineTo(
+      b.x - size * Math.cos(angle + Math.PI / 6),
+      b.y - size * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function label(text, point, color, dx = 0, dy = 0) {
+    ctx.font = "bold 13px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.strokeText(text, point.x + dx, point.y + dy);
+    ctx.fillStyle = color;
+    ctx.fillText(text, point.x + dx, point.y + dy);
+  }
+
+  function drawScene() {
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    if (!width || !height) return;
+
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const { a, b, g, aMagnitude, bMagnitude } = values();
+    const p = point => project(point, width, height);
+    const z = (x, y) => a * x + b * y;
+
+    // 水平な基準面の格子
+    for (let i = -4; i <= 4; i++) {
+      line(p([i, -4, 0]), p([i, 4, 0]), "#e6edf6");
+      line(p([-4, i, 0]), p([4, i, 0]), "#e6edf6");
+    }
+
+    // 傾いた平面 z = ax + by
+    const corners = [
+      [-3.6, -3.6],
+      [3.6, -3.6],
+      [3.6, 3.6],
+      [-3.6, 3.6]
+    ];
+
+    ctx.beginPath();
+    corners.forEach(([x, y], index) => {
+      const point = p([x, y, z(x, y)]);
+      if (index === 0) ctx.moveTo(point.x, point.y);
+      else ctx.lineTo(point.x, point.y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = "rgba(147,197,253,0.32)";
+    ctx.strokeStyle = "rgba(59,130,246,0.55)";
+    ctx.lineWidth = 1.5;
+    ctx.fill();
+    ctx.stroke();
+
+    // 平面上の格子
+    for (let i = -3; i <= 3; i++) {
+      line(
+        p([i, -3.6, z(i, -3.6)]),
+        p([i, 3.6, z(i, 3.6)]),
+        "rgba(70,130,210,0.24)"
+      );
+      line(
+        p([-3.6, i, z(-3.6, i)]),
+        p([3.6, i, z(3.6, i)]),
+        "rgba(70,130,210,0.24)"
+      );
+    }
+
+    const origin = p([0, 0, 0]);
+    const eastAxis = p([4.2, 0, 0]);
+    const northAxis = p([0, 4.2, 0]);
+
+    arrow(origin, eastAxis, "#94a3b8", 1.5);
+    arrow(origin, northAxis, "#94a3b8", 1.5);
+    label("東", eastAxis, "#64748b", 12, 0);
+    label("北", northAxis, "#64748b", 0, -12);
+
+    // 3本とも水平距離を 2.6 とする。
+    const d = 2.6;
+
+    if (aMagnitude > 1e-10) {
+      const x = Math.sign(a) * d;
+      const end = p([x, 0, z(x, 0)]);
+      arrow(origin, end, colors.east);
+      label("東西", end, colors.east, 0, 15);
+    }
+
+    if (bMagnitude > 1e-10) {
+      const y = Math.sign(b) * d;
+      const end = p([0, y, z(0, y)]);
+      arrow(origin, end, colors.north);
+      label("南北", end, colors.north, 0, -15);
+    }
+
+    // 水平面上の最急方向は (a, b) / g。
+    const x = d * a / g;
+    const y = d * b / g;
+    const steepEnd = p([x, y, z(x, y)]);
+    arrow(origin, steepEnd, colors.steep, 4);
+    label("最急", steepEnd, colors.steep, 0, -17);
+
+    ctx.beginPath();
+    ctx.arc(origin.x, origin.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#334155";
+    ctx.fill();
+  }
+
+  function drawTriangle() {
+    const { g, aMagnitude, bMagnitude } = values();
+
+    // 最長の辺を 150px に収めるため、全条件で図がはみ出さない。
+    const scale = 150 / g;
+    const x0 = 55;
+    const y0 = 180;
+    const x1 = x0 + aMagnitude * scale;
+    const y1 = y0 - bMagnitude * scale;
+
+    triangle.innerHTML = `
+      <polygon
+        points="${x0},${y0} ${x1},${y0} ${x1},${y1}"
+        fill="rgba(124,58,237,0.08)"
+      />
+      <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y0}"
+            stroke="${colors.east}" stroke-width="4" />
+      <line x1="${x1}" y1="${y0}" x2="${x1}" y2="${y1}"
+            stroke="${colors.north}" stroke-width="4" />
+      <line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}"
+            stroke="${colors.steep}" stroke-width="4" />
+      <text x="55" y="205" fill="${colors.east}"
+            font-size="13" font-weight="bold">横：東西</text>
+      <text x="215" y="55" fill="${colors.north}"
+            font-size="13" font-weight="bold">縦：南北</text>
+      <text x="55" y="25" fill="${colors.steep}"
+            font-size="13" font-weight="bold">斜辺：最急</text>
+    `;
+  }
+
+  function updateText() {
+    const v = values();
+    const isProblem = v.maxUnits === 100 && v.northUnits === 60;
+
+    $("maxValue").textContent =
+      v.maxUnits === 100 ? "1 / 3" : format(v.g);
+
+    $("northValue").textContent =
+      v.northUnits === 60 ? "1 / 5" : format(v.bMagnitude);
+
+    $("answer").textContent =
+      isProblem ? "4 / 15 ≒ 0.267" : format(v.aMagnitude);
+
+    if (v.aMagnitude < 1e-10) {
+      $("signedAnswer").textContent = "東西方向には傾いていません。";
+    } else {
+      const sign = v.a > 0 ? "+" : "−";
+      const amount = isProblem ? "4 / 15" : format(v.aMagnitude);
+      $("signedAnswer").textContent =
+        `東向きに測った符号付き勾配：${sign}${amount}`;
+    }
+
+    $("formula").textContent = isProblem
+      ? "（4/15）² ＋（1/5）² ＝（1/3）²"
+      : `東西² ＋ 南北² ＝ 最急² （約 ${format(v.aMagnitude)}² ＋ ${format(v.bMagnitude)}² ＝ ${format(v.g)}²）`;
+  }
+
+  function render() {
+    const maxSlider = $("maxSlope");
+    const northSlider = $("northSlope");
+
+    // 最急勾配より南北勾配が大きくならないようにする。
+    northSlider.max = maxSlider.value;
+    if (Number(northSlider.value) > Number(maxSlider.value)) {
+      northSlider.value = maxSlider.value;
+    }
+
+    updateText();
+    drawScene();
+    drawTriangle();
+  }
+
+  for (const id of ["maxSlope", "northSlope"]) {
+    $(id).addEventListener("input", render);
+  }
+
+  for (const id of ["eastDirection", "northDirection"]) {
+    $(id).addEventListener("change", render);
+  }
+
+  $("resetValues").addEventListener("click", () => {
+    $("maxSlope").value = 100;
+    $("northSlope").max = 100;
+    $("northSlope").value = 60;
+    $("eastDirection").value = "1";
+    $("northDirection").value = "1";
+    render();
+  });
+
+  $("resetView").addEventListener("click", () => {
+    state.azimuth = -0.65;
+    state.elevation = 0.58;
+    drawScene();
+  });
+
+  let dragging = false;
+  let previousX = 0;
+  let previousY = 0;
+
+  canvas.addEventListener("pointerdown", event => {
+    dragging = true;
+    previousX = event.clientX;
+    previousY = event.clientY;
+    canvas.setPointerCapture(event.pointerId);
+  });
+
+  canvas.addEventListener("pointermove", event => {
+    if (!dragging) return;
+
+    state.azimuth += (event.clientX - previousX) * 0.01;
+    state.elevation = Math.max(
+      0.15,
+      Math.min(
+        1.35,
+        state.elevation + (event.clientY - previousY) * 0.008
+      )
+    );
+
+    previousX = event.clientX;
+    previousY = event.clientY;
+    drawScene();
+  });
+
+  canvas.addEventListener("pointerup", () => {
+    dragging = false;
+  });
+
+  canvas.addEventListener("pointercancel", () => {
+    dragging = false;
+  });
+
+  canvas.addEventListener("lostpointercapture", () => {
+    dragging = false;
+  });
+
+  window.addEventListener("resize", drawScene);
+  render();
+})();
+</script>
+</body>
+</html>
